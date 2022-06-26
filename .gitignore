@@ -1,0 +1,10 @@
+.cache/*
+.vscode/*
+build/*
+lib/*
+bin/*
+CMakeFiles/*
+cmake_install.cmake
+CMakeCache.txt
+Makefile
+compile_commands.json
