@@ -1,38 +1,54 @@
-#ifndef __HTML_PARSER_H__
-#define __HTML_PARSER_H__
+#ifndef __LEPT_HTML_PARSER_H__
+#define __LEPT_HTML_PARSER_H__
 
 #include <iostream>
+#include <libxml2/libxml/HTMLparser.h>
+#include <libxml2/libxml/parser.h>
+#include <libxml2/libxml/tree.h>
+#include <libxml2/libxml/xpath.h>
 #include <map>
 #include <memory>
 #include <set>
 #include <string>
 #include <vector>
 
-namespace html {
-class HtmlParser;
+namespace etree {
 
-class HtmlElement : public std::enable_shared_from_this<HtmlElement>
+class HTML;
+
+class HtmlElement
 {
-    friend class HtmlParser;
+    friend class HTML;
 
 public:
-    typedef std::shared_ptr<HtmlElement> Ptr;
-
-public:
-    HtmlElement() {}
+    HtmlElement(){};
     HtmlElement(std::shared_ptr<HtmlElement> p)
-        : parent(p) {}
+        : parent(p){};
 
-    std::string GetAttribute(const std::string& str);
+    std::string GetAttribute(const std::string& name) const {
+        if (attributes.find(name) != attributes.end()) { return attributes.at(name); }
+        return "";
+    }
+
     std::shared_ptr<HtmlElement> GetElementById(const std::string& id);
-    std::vector<std::shared_ptr<HtmlElement>> GetElementByClassName(const std::string& name);
-    std::vector<std::shared_ptr<HtmlElement>> GetElementByTagName(const std::string& tag);
-    std::shared_ptr<HtmlElement> GetParent() { return parent.lock(); }
+    std::vector<std::shared_ptr<HtmlElement>> GetElementsByTag(const std::string& tag);
+    std::vector<std::shared_ptr<HtmlElement>> GetElementsByClass(const std::string& class_name);
+
+    std::shared_ptr<HtmlElement> GetParent() const { return parent.lock(); }
     const std::string& GetValue();
-    const std::string& GetName() { return tag; }
-    std::string text();
+    const std::string& GetTag() { return tag_name; }
+
+    std::string text() {
+        std::string result;
+        PlainStylize(result);
+        return result;
+    }
     void PlainStylize(std::string& str);
-    std::string html();
+    std::string html() {
+        std::string result;
+        HtmlStylize(result);
+        return result;
+    }
     void HtmlStylize(std::string& str);
 
 private:
@@ -41,84 +57,80 @@ private:
 
     void GetElementByTagName(const std::string& name,
                              std::vector<std::shared_ptr<HtmlElement>>& result);
-
     void GetAllElement(std::vector<std::shared_ptr<HtmlElement>>& result);
 
-    void Parse(const std::string& attr);
+private:
+    std::set<std::string> SplitClassName(const std::string& class_name);
+    void InsertIfNotExist(std::vector<std::shared_ptr<HtmlElement>>& vec,
+                          const std::shared_ptr<HtmlElement>& ele);
 
-    std::set<std::string> SplitClassName(const std::string& name);
-
-    void InsertIfNotExists(std::vector<std::shared_ptr<HtmlElement>>& result,
-                           const std::shared_ptr<HtmlElement>& ele);
+    void split(const std::string& str, std::vector<std::string>& tokens, const std::string& delim);
 
 private:
-    void split(const std::string& str, std::vector<std::string>& tokens, const std::string delim);
-
-private:
-    enum State
-    {
-        ATTR_KEY,
-        ATTR_VALUE_BEGIN,
-        ATTR_VALUE_END,
-    };
-
-    std::string tag;
-    std::string value;
+    std::string tag_name;
+    std::string tag_value;
     std::map<std::string, std::string> attributes;
     std::vector<std::shared_ptr<HtmlElement>> children;
     std::weak_ptr<HtmlElement> parent;
 };
 
-class HtmlParser
-{
-public:
-    HtmlParser();
-    std::shared_ptr<HtmlElement> Parse(const char* html, std::size_t len);
-    std::shared_ptr<HtmlElement> Parse(const std::string& html);
-
-private:
-    std::size_t ParseElement(std::size_t index, std::shared_ptr<HtmlElement>& element);
-    std::size_t SkipUntil(std::size_t index, const char* data);
-    std::size_t SkipUntil(std::size_t index, const char data);
-
-private:
-    enum State
-    {
-        TAG_BEGIN,
-        ATTR,
-        VALUE,
-        TAG_END
-    };
-
-    const char* _stream;
-    std::size_t _length;
-    std::set<std::string> _self_closing_tags;
-    std::shared_ptr<HtmlElement> _root;
-};
-
 class HTML
 {
 public:
-    HTML(std::shared_ptr<HtmlElement>& root)
-        : _root(root) {}
-    HTML(const std::string& html) { _root = HtmlParser().Parse(html); }
+    HTML(const std::string& html_string, bool is_file = false) {
+        if (is_file) {
+            doc_ = htmlReadFile(
+                html_string.c_str(),
+                "UTF-8",
+                HTML_PARSE_NOBLANKS | HTML_PARSE_NOERROR | HTML_PARSE_NOWARNING | HTML_PARSE_NONET);
+        }
+        else {
+            doc_ = htmlReadMemory(
+                html_string.data(),
+                html_string.size(),
+                NULL,
+                "UTF-8",
+                HTML_PARSE_NOBLANKS | HTML_PARSE_NOERROR | HTML_PARSE_NOWARNING | HTML_PARSE_NONET);
+        }
+        if (doc_ == NULL) {
+            std::cout << "htmlReadMemory error" << std::endl;
+            return;
+        }
+        root_ = std::make_shared<HtmlElement>();
+        xmlNodePtr root = xmlDocGetRootElement(doc_);
+        parse(root, root_);
+    }
+
+    ~HTML() {
+        xmlFreeDoc(doc_);
+        xmlCleanupParser();
+    }
+
+    std::string text() { return root_->text(); }
+
+    std::string html() { return root_->html(); }
 
     std::shared_ptr<HtmlElement> GetElementById(const std::string& id) {
-        return _root->GetElementById(id);
+        return root_->GetElementById(id);
     }
-    std::vector<std::shared_ptr<HtmlElement>> GetElementByClassName(const std::string& name) {
-        return _root->GetElementByClassName(name);
+
+    std::vector<std::shared_ptr<HtmlElement>> GetElementsByTag(const std::string& tag) {
+        return root_->GetElementsByTag(tag);
     }
-    std::vector<std::shared_ptr<HtmlElement>> GetElementByTagName(const std::string& tag) {
-        return _root->GetElementByTagName(tag);
+
+    std::vector<std::shared_ptr<HtmlElement>> GetElementsByClass(const std::string& class_name) {
+        return root_->GetElementsByClass(class_name);
     }
-    std::string text() { return _root->text(); }
-    std::string html() { return _root->html(); }
+
+    std::vector<std::shared_ptr<HtmlElement>> xpath(const std::string& xpath);
 
 private:
-    std::shared_ptr<HtmlElement> _root;
-};
+    void parse(xmlNodePtr ptr, std::shared_ptr<HtmlElement> parent);
 
+private:
+    std::shared_ptr<HtmlElement> root_;
+    htmlDocPtr doc_;
+};
 
 }   // namespace html
 
