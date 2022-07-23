@@ -7,10 +7,14 @@
 namespace etree {
 std::shared_ptr<HtmlElement> HtmlElement::GetElementById(const std::string& id) {
     for (auto& item : children) {
-        if (item->GetAttribute("id") == id) { return item; }
+        if (item->GetAttribute("id") == id) {
+            return item;
+        }
 
         auto ret = item->GetElementById(id);
-        if (ret) { return ret; }
+        if (ret) {
+            return ret;
+        }
     }
     return nullptr;
 }
@@ -50,7 +54,9 @@ void HtmlElement::PlainStylize(std::string& str) {
 
         if (++i < children.size()) {
             std::string ele = children[i]->GetTag();
-            if (ele == "td") { str.append("\t"); }
+            if (ele == "td") {
+                str.append("\t");
+            }
             else if (ele == "tr" || ele == "br" || ele == "div" || ele == "p" || ele == "hr" ||
                      ele == "area" || ele == "h1" || ele == "h2" || ele == "h3" || ele == "h4" ||
                      ele == "h5" || ele == "h6" || ele == "h7") {
@@ -62,7 +68,9 @@ void HtmlElement::PlainStylize(std::string& str) {
 
 void HtmlElement::HtmlStylize(std::string& str) {
     if (tag_name.empty()) {
-        for (auto& child : children) { child->HtmlStylize(str); }
+        for (auto& child : children) {
+            child->HtmlStylize(str);
+        }
         return;
     }
     else if (tag_name == "text") {
@@ -71,11 +79,17 @@ void HtmlElement::HtmlStylize(std::string& str) {
     }
 
     str.append("<" + tag_name);
-    for (auto& attr : attributes) { str.append(" " + attr.first + "=\"" + attr.second + "\""); }
+    for (auto& attr : attributes) {
+        str.append(" " + attr.first + "=\"" + attr.second + "\"");
+    }
     str.append(">");
-    if (children.empty()) { str.append(tag_value); }
+    if (children.empty()) {
+        str.append(tag_value);
+    }
     else {
-        for (auto& child : children) { child->HtmlStylize(str); }
+        for (auto& child : children) {
+            child->HtmlStylize(str);
+        }
     }
     str.append("</" + tag_name + ">");
 }
@@ -91,7 +105,9 @@ void HtmlElement::GetElementByClassName(const std::string& name,
                 break;
             }
         }
-        if (iter == class_name.end()) { InsertIfNotExist(result, child); }
+        if (iter == class_name.end()) {
+            InsertIfNotExist(result, child);
+        }
 
         child->GetElementByClassName(name, result);
     }
@@ -100,7 +116,9 @@ void HtmlElement::GetElementByClassName(const std::string& name,
 void HtmlElement::GetElementByTagName(const std::string& name,
                                       std::vector<std::shared_ptr<HtmlElement>>& result) {
     for (auto& child : children) {
-        if (child->GetTag() == name) { InsertIfNotExist(result, child); }
+        if (child->GetTag() == name) {
+            InsertIfNotExist(result, child);
+        }
         child->GetElementByTagName(name, result);
     }
 }
@@ -120,7 +138,9 @@ std::set<std::string> HtmlElement::SplitClassName(const std::string& str) {
 
 void HtmlElement::InsertIfNotExist(std::vector<std::shared_ptr<HtmlElement>>& result,
                                    const std::shared_ptr<HtmlElement>& ele) {
-    if (std::find(result.begin(), result.end(), ele) == result.end()) { result.push_back(ele); }
+    if (std::find(result.begin(), result.end(), ele) == result.end()) {
+        result.push_back(ele);
+    }
 }
 
 void HtmlElement::split(const std::string& str, std::vector<std::string>& result,
@@ -137,7 +157,9 @@ void HtmlElement::split(const std::string& str, std::vector<std::string>& result
 
 
 void HTML::parse(xmlNodePtr ptr, std::shared_ptr<HtmlElement> parent) {
-    if (ptr == nullptr) { return; }
+    if (ptr == nullptr) {
+        return;
+    }
     std::shared_ptr<HtmlElement> ele = std::make_shared<HtmlElement>();
     ele->parent = parent;
     ele->tag_name = (char*)ptr->name == nullptr ? "" : (char*)ptr->name;
@@ -146,7 +168,9 @@ void HTML::parse(xmlNodePtr ptr, std::shared_ptr<HtmlElement> parent) {
         xmlAttrPtr attr = ptr->properties;
         while (attr) {
             ele->attributes[(char*)attr->name] =
-                (char*)xmlNodeListGetString(ptr->doc, attr->children, 1);
+                (char*)xmlNodeListGetString(ptr->doc, attr->children, 1) == nullptr
+                    ? ""
+                    : (char*)xmlNodeListGetString(ptr->doc, attr->children, 1);
             attr = attr->next;
         }
     }
@@ -162,7 +186,9 @@ void HTML::parse(xmlNodePtr ptr, std::shared_ptr<HtmlElement> parent) {
 
 std::vector<std::shared_ptr<HtmlElement>> HTML::xpath(const std::string& xpath) {
     xmlXPathContextPtr context = xmlXPathNewContext(doc_);
-    if (context == nullptr) { throw std::runtime_error("Unable to create new XPath context."); }
+    if (context == nullptr) {
+        throw std::runtime_error("Unable to create new XPath context.");
+    }
     xmlXPathObjectPtr result = xmlXPathEvalExpression(BAD_CAST(xpath.data()), context);
     xmlXPathFreeContext(context);
     std::vector<std::shared_ptr<HtmlElement>> eles;
